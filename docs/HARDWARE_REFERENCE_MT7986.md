@@ -50,7 +50,7 @@ The front multi-color indicator on the JIDU6401 is mapped to three sysfs LED cha
 - `/sys/class/leds/green:status`
 - `/sys/class/leds/blue:status`
 
-Our provided `scripts/wan_led_monitor.sh` dynamically drives these LEDs based on the active connection state:
+Our provided `scripts/wan-led-monitor.sh` dynamically drives these LEDs based on the active connection state:
 - 🟢 **Solid Green**: Dual-stack online (464XLAT IPv4 + native IPv6 active).
 - 🔵 **Solid Blue**: Native IPv6 connected, CLAT translation pending.
 - 🔴 **Solid Red**: No WAN link or upstream default route.
