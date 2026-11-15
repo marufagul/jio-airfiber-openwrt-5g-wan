@@ -10,9 +10,28 @@
 
 **Unlock full 5G wire-speed gigabit performance, native 464XLAT IPv4/IPv6 translation, and 160MHz Wi-Fi 6 on your OpenWrt-flashed Jio AirFiber hardware.**
 
-[Quick Start](#-quick-start-1-line-installer) • [Core Innovations](#-core-innovations) • [Performance Matrix](#-performance-matrix) • [Architecture](#-how-5g-odu-bridging-works) • [Hardware Docs](docs/HARDWARE_REFERENCE_MT7986.md)
+[Why I Built This](#-why-i-built-this-a-note-from-the-author) • [Quick Start](#-quick-start-1-line-installer) • [Core Innovations](#-core-innovations) • [Performance Matrix](#-performance-matrix) • [Architecture](#-how-5g-odu-bridging-works) • [Hardware Docs](docs/HARDWARE_REFERENCE_MT7986.md)
 
 </div>
+
+---
+
+## 💡 Why I Built This (A Note from the Author)
+
+When I flashed OpenWrt onto my Jio AirFiber router, I plugged the 5G Outdoor Unit (ODU) into the 2.5GbE PoE WAN port—and **nothing worked properly**. 
+
+The router could not route IPv4 traffic at all, web pages hung indefinitely, online games refused to connect, Wi-Fi 6 was locked at basic 80MHz speeds, and routing 500 Mbps pushed the CPU to 100% load.
+
+**I searched the internet, OpenWrt forums, and GitHub—and could not find a single working tutorial or repository explaining how to make Jio 5G AirFiber work on OpenWrt.** Nobody had publicly solved it or shared their findings.
+
+We spent hundreds of hours in deep reverse engineering:
+- Analyzing stock firmware SquashFS dumps to see how Jio manages the ODU.
+- Discovering that Jio's 5G SA mobile core is pure IPv6, requiring customer-side **464XLAT CLAT translation** for IPv4 compatibility with gaming servers, banking, and legacy apps.
+- Tuning the exact **1420-byte TCP MSS clamping** required to avoid packet fragmentation over the 5G radio link.
+- Unlocking the **MediaTek Filogic 830 (MT7986) Wireless Ethernet Dispatcher (WED)** hardware packet engine to achieve line-rate 2.5 Gbps with less than 3% CPU utilization.
+- Calibrating dual-band Wi-Fi 6 for **160MHz (HE160)** channel bandwidth under the Indian regulatory domain (`IN`).
+
+**We are giving all of this hard-won engineering to the community 100% free and open-source.** If this project saved you weeks of headache, please consider starring ⭐ the repository and sharing it!
 
 ---
 
@@ -35,9 +54,9 @@ wget -O - https://raw.githubusercontent.com/marufagul/jio-airfiber-openwrt-5g-wa
 
 ### What This Installer Does:
 1. 🛡️ **Safety Backup**: Saves `/etc/config/network`, `firewall`, and `wireless` to `/etc/jio-5g/backups/`.
-2. 🌐 **5G ODU WAN Link**: Detects the 2.5GbE PoE WAN interface connected to your Outdoor Unit.
-3. 🔄 **464XLAT CLAT Translation**: Sets up `clatd` with Jio's NAT64 prefix (`64:ff9b::/96`) for seamless IPv4 access (essential for online games, banking, and legacy apps).
-4. ⚡ **MediaTek WED Acceleration**: Activates Wireless Ethernet Dispatcher and nftables hardware flow offloading for line-rate 2.5 Gbps throughput at ~0% CPU utilization.
+2. 🌐 **5G ODU WAN Link**: Detects the 2.5GbE PoE WAN interface connected to your Outdoor Unit and establishes native IPv6 connectivity.
+3. 🔄 **464XLAT CLAT Translation**: Sets up `clatd` with Jio's NAT64 prefix (`64:ff9b::/96`) for seamless IPv4 access (essential for Steam, PlayStation Network, banking apps).
+4. ⚡ **MediaTek WED Acceleration**: Activates Wireless Ethernet Dispatcher and nftables hardware flow offloading for line-rate 2.5 Gbps throughput at ~0% CPU load.
 5. 📶 **Wi-Fi 6 (160MHz Bandwidth)**: Configures 5GHz radio to HE160 channel width for up to 2402 Mbps wireless link speed.
 
 To restore previous settings at any time:
