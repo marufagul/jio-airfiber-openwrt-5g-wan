@@ -67,7 +67,7 @@ echo "[+] Detected physical WAN device: $WAN_PORT"
 
 MAC_WAN=$(cat /sys/class/net/"$WAN_PORT"/address 2>/dev/null || echo "")
 if [ -n "$MAC_WAN" ]; then
-    echo "[+] Inheriting physical WAN MAC: $MAC_WAN"
+    echo "[+] Inheriting physical WAN MAC onto VLAN 1015: $MAC_WAN"
 fi
 
 # 4. Configure 802.1Q VLAN 1015 for 5G Public Internet
@@ -157,29 +157,56 @@ uci set firewall.@zone[1].mtu_fix='1'
 
 uci commit firewall
 
-# 7. Wi-Fi 6 & MT76 DHCP Drop Bug Fix
-echo "[*] Step 6/6: Optimizing Wi-Fi 6 & fixing MT76 DHCP drop issue..."
+# 7. Wi-Fi 6 Setup, 5GHz Interface Provisioning & MT76 DHCP Fix
+echo "[*] Step 6/6: Configuring Wi-Fi 6 radios and interfaces..."
 if [ -f /etc/config/wireless ]; then
+    RADIO_5G=""
+    RADIO_2G=""
+
     for radio in $(uci show wireless | grep -E "=wifi-device" | cut -d'.' -f2 | cut -d'=' -f1); do
         BAND=$(uci -q get wireless."$radio".band || echo "")
         HWMODE=$(uci -q get wireless."$radio".hwmode || echo "")
         
-        # 5GHz Radio: HE160, DFS/36, WPA3/WPA2 mixed
+        # 5GHz Radio: Default to HE80 for instant beaconing (zero DFS delay)
         if [ "$BAND" = "5g" ] || echo "$HWMODE" | grep -q "11a"; then
-            echo "[+] Setting 5GHz radio ($radio) to HE160 (160MHz) / WPA3-SAE mixed..."
+            RADIO_5G="$radio"
+            echo "[+] Setting 5GHz radio ($radio) to HE80 (instant beaconing)..."
             uci set wireless."$radio".country='IN'
-            uci set wireless."$radio".htmode='HE160'
+            uci set wireless."$radio".htmode='HE80'
             uci set wireless."$radio".channel='36'
             uci set wireless."$radio".disabled='0'
         else
+            RADIO_2G="$radio"
             # 2.4GHz Radio: HT20 + WPA2-PSK (psk2) to prevent legacy device lockouts
-            echo "[+] Setting 2.4GHz radio ($radio) to HT20 / WPA2-PSK (Maximum compatibility)..."
+            echo "[+] Setting 2.4GHz radio ($radio) to HT20 / WPA2-PSK (Universal compatibility)..."
             uci set wireless."$radio".country='IN'
             uci set wireless."$radio".htmode='HT20'
             uci set wireless."$radio".channel='auto'
             uci set wireless."$radio".disabled='0'
         fi
     done
+
+    # Ensure 5GHz wifi-iface exists (fixes clean OpenWrt builds where 5GHz AP is missing)
+    HAS_5G_IFACE=0
+    for iface in $(uci show wireless | grep -E "=wifi-iface" | cut -d'.' -f2 | cut -d'=' -f1); do
+        IFACE_DEV=$(uci -q get wireless."$iface".device || echo "")
+        if [ "$IFACE_DEV" = "$RADIO_5G" ]; then
+            HAS_5G_IFACE=1
+            break
+        fi
+    done
+
+    if [ "$HAS_5G_IFACE" -eq 0 ] && [ -n "$RADIO_5G" ]; then
+        echo "[+] No 5GHz AP interface found. Creating wireless.wifinet5 on $RADIO_5G..."
+        uci set wireless.wifinet5=wifi-iface
+        uci set wireless.wifinet5.device="$RADIO_5G"
+        uci set wireless.wifinet5.network='lan'
+        uci set wireless.wifinet5.mode='ap'
+        uci set wireless.wifinet5.ssid='OpenWrt-Jio5G-5G'
+        uci set wireless.wifinet5.encryption='sae-mixed'
+        uci set wireless.wifinet5.key='ChangeThisStrongPassword123'
+        uci set wireless.wifinet5.multicast_to_unicast='0'
+    fi
 
     # MT76 Bugfix: Disable multicast_to_unicast to prevent DHCP drops on clients
     for iface in $(uci show wireless | grep -E "=wifi-iface" | cut -d'.' -f2 | cut -d'=' -f1); do
@@ -239,7 +266,7 @@ echo "• High-Speed DNS:       Cloudflare + Google (Jio DNS Hijack Disabled)"
 echo "• Hardware Offload:     Active (Filogic WED Line-Rate 2.5 Gbps)"
 echo "• TCP MSS Clamping:     1420 Bytes (Zero Fragmentation)"
 echo "• Wi-Fi MT76 Fix:       multicast_to_unicast disabled (Zero DHCP Drops)"
-echo "• Wi-Fi 5GHz:           HE160 (160MHz Bandwidth, Up to 2400 Mbps)"
+echo "• Wi-Fi 5GHz:           HE80 (Instant beaconing, change to HE160 if desired)"
 echo "• Wi-Fi 2.4GHz:         HT20 / WPA2 (100% Legacy Device Compatibility)"
 echo "• Rollback Command:     /etc/jio-5g/backup_restore.sh --restore"
 echo "================================================================="

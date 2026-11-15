@@ -30,13 +30,15 @@ config wifi-iface 'default_radio0'
 	option key 'ChangeThisStrongPassword123'
 	option multicast_to_unicast '0'
 
-# 5GHz Radio (MT7986 802.11a/n/ac/ax) - 160MHz Ultra-High Throughput
+# 5GHz Radio (MT7986 802.11a/n/ac/ax) - Wi-Fi 6 High Throughput
+# Default htmode is HE80 (instant beaconing on non-DFS channels 36-48).
+# Change to HE160 for 2402 Mbps link speed (note: takes 60-120s for DFS radar check).
 config wifi-device 'radio1'
 	option type 'mac80211'
 	option path 'platform/soc/18000000.wifi+1'
 	option band '5g'
 	option channel '36'
-	option htmode 'HE160'
+	option htmode 'HE80'
 	option country 'IN'
 	option cell_density '0'
 
