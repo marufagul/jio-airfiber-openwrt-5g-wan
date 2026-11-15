@@ -141,6 +141,136 @@ else
     pkg_install 464xlat odhcp6c
 fi
 
+# Ensure netifd 464xlat protocol handler is deployed to /lib/netifd/proto/
+mkdir -p /lib/netifd/proto
+if [ ! -f /lib/netifd/proto/464xlat.sh ]; then
+    echo "[*] Deploying netifd 464xlat protocol handler to /lib/netifd/proto/464xlat.sh..."
+    SCRIPT_DIR=$(dirname "$0")
+    if [ -f "$SCRIPT_DIR/scripts/464xlat.sh" ]; then
+        cp "$SCRIPT_DIR/scripts/464xlat.sh" /lib/netifd/proto/464xlat.sh
+    else
+        # Inline fallback for 1-liner pipe installations (wget -O - ... | sh)
+        cat << 'EOF' > /lib/netifd/proto/464xlat.sh
+#!/bin/sh
+[ -n "$INCLUDE_ONLY" ] || {
+	. /lib/functions.sh
+	. /lib/functions/network.sh
+	. ../netifd-proto.sh
+	init_proto "$@"
+}
+
+proto_464xlat_setup() {
+	local cfg="$1"
+	local iface="$2"
+	local link="464-$cfg"
+
+	local ip6addr ip6prefix tunlink zone
+	json_get_vars ip6addr ip6prefix tunlink zone
+
+	[ "$zone" = "-" ] && zone=""
+
+	( proto_add_host_dependency "$cfg" "::" "$tunlink" )
+
+	if [ -z "$tunlink" ] && ! network_find_wan6 tunlink; then
+		proto_notify_error "$cfg" "NO_WAN_LINK"
+		return
+	fi
+	network_get_device tundev "$tunlink"
+
+	[ -z "$ip6prefix" ] && ip6prefix="64:ff9b::/96"
+
+	ip6addr=$(464xlatcfg "$link" "$tundev" "$ip6prefix" 192.0.0.1)
+	if [ -z "$ip6addr" ]; then
+		proto_notify_error "$cfg" "CLAT_CONFIG_FAILED"
+		return
+	fi
+
+	ip -6 rule del from all lookup local 2>/dev/null
+	ip -6 rule add from all lookup local pref 1 2>/dev/null
+	ip -6 rule add to "$ip6addr" lookup prelocal pref 0 2>/dev/null
+	echo "$ip6addr" > "/tmp/464-$cfg-anycast"
+
+	ip link set dev "$link" mtu 1500 2>/dev/null
+	ip link set dev "$link" up 2>/dev/null
+	ip -6 addr add fe80::1/64 dev "$link" 2>/dev/null
+	ip -6 route replace "$ip6addr/128" dev "$link" table 128 2>/dev/null
+
+	proto_init_update "$link" 1
+	proto_add_ipv4_route "0.0.0.0" 0 "" "" 2048
+	proto_add_ipv6_route "$ip6addr" 128 "" "" "" "" 128
+
+	proto_add_data
+	[ -n "$zone" ] && json_add_string zone "$zone"
+
+	json_add_array firewall
+		[ -z "$zone" ] && zone="wan"
+
+		json_add_object ""
+			json_add_string type nat
+			json_add_string target SNAT
+			json_add_string family inet
+			json_add_string snat_ip 192.0.0.1
+		json_close_object
+		[ -n "$zone" ] && {
+			json_add_object ""
+				json_add_string type rule
+				json_add_string family inet6
+				json_add_string proto all
+				json_add_string direction in
+				json_add_string dest "$zone"
+				json_add_string src "$zone"
+				json_add_string src_ip "$ip6addr"
+				json_add_string target ACCEPT
+			json_close_object
+		}
+	json_close_array
+	proto_close_data
+
+	proto_send_update "$cfg"
+}
+
+proto_464xlat_teardown() {
+	local cfg="$1"
+	local link="464-$cfg"
+
+	[ -f "/tmp/464-$cfg-anycast" ] || return
+	local ip6addr
+	ip6addr=$(cat "/tmp/464-$cfg-anycast")
+
+	464xlatcfg "$link"
+
+	rm -f "/tmp/464-$cfg-anycast"
+	if [ -n "$ip6addr" ]; then
+		ip -6 rule del to "$ip6addr" lookup prelocal 2>/dev/null
+		ip -6 route del "$ip6addr/128" dev "$link" table 128 2>/dev/null
+	fi
+
+	if [ -z "$(ls /tmp/464-*-anycast 2>/dev/null)" ]; then
+		ip -6 rule del from all lookup local 2>/dev/null
+		ip -6 rule add from all lookup local pref 0 2>/dev/null
+	fi
+
+	echo 192.0.0.1 > /proc/net/nf_conntrack 2>/dev/null || true
+}
+
+proto_464xlat_init_config() {
+	no_device=1
+	available=1
+
+	proto_config_add_string "ip6prefix"
+	proto_config_add_string "ip6addr"
+	proto_config_add_string "tunlink"
+	proto_config_add_string "zone"
+}
+
+[ -n "$INCLUDE_ONLY" ] || {
+	add_protocol 464xlat
+}
+EOF
+    fi
+    chmod +x /lib/netifd/proto/464xlat.sh
+fi
+
 # 5. Configure LAN IPv6 Prefix Delegation & odhcpd Router Advertisements
 echo "[*] Step 4/6: Configuring LAN IPv6 Prefix Delegation (odhcpd) & DNS cache..."
 uci set dhcp.lan.ra='server'
@@ -253,9 +383,206 @@ if [ -d /sys/class/leds/green:status ] || [ -d /sys/class/leds/red:status ]; the
     SCRIPT_DIR=$(dirname "$0")
     if [ -f "$SCRIPT_DIR/scripts/wan_led_monitor.sh" ]; then
         cp "$SCRIPT_DIR/scripts/wan_led_monitor.sh" "$INSTALL_DIR/wan_led_monitor.sh"
-        chmod +x "$INSTALL_DIR/wan_led_monitor.sh"
-        
-        cat << 'EOF' > /etc/init.d/wan-led-monitor
+    elif [ -f "$SCRIPT_DIR/scripts/wan-led-monitor.sh" ]; then
+        cp "$SCRIPT_DIR/scripts/wan-led-monitor.sh" "$INSTALL_DIR/wan_led_monitor.sh"
+    else
+        # Inline fallback for 1-liner pipe installations (wget -O - ... | sh)
+        cat << 'EOF' > "$INSTALL_DIR/wan_led_monitor.sh"
+#!/bin/sh
+trap 'turn_off_all; exit 0' TERM INT
+
+RED_LED="/sys/class/leds/red:status"
+GREEN_LED="/sys/class/leds/green:status"
+BLUE_LED="/sys/class/leds/blue:status"
+
+set_led() {
+    echo none > "${1}/trigger" 2>/dev/null
+    echo "$2" > "${1}/brightness" 2>/dev/null
+}
+
+blink_led() {
+    echo timer > "${1}/trigger" 2>/dev/null
+    echo "${2:-500}" > "${1}/delay_on" 2>/dev/null
+    echo "${2:-500}" > "${1}/delay_off" 2>/dev/null
+}
+
+turn_off_all() {
+    set_led "$RED_LED" 0
+    set_led "$GREEN_LED" 0
+    set_led "$BLUE_LED" 0
+}
+
+is_upgrading() {
+    pgrep -f "sysupgrade" >/dev/null 2>&1 && return 0
+    [ -e /tmp/sysupgrade ] && return 0
+    [ -e /overlay/.sysupgrade ] && return 0
+    [ -e /tmp/.failsafe ] && return 0
+    [ -f /tmp/sysupgrade.always_force_backup ] && return 0
+    ls /tmp/sysupgrade-* >/dev/null 2>&1 && return 0
+    return 1
+}
+
+check_wan_link() {
+    local wan_dev
+    wan_dev=$(uci -q get network.wan6.device 2>/dev/null)
+    [ -z "$wan_dev" ] && wan_dev="wan.1015"
+
+    local operstate
+    operstate=$(cat "/sys/class/net/${wan_dev}/operstate" 2>/dev/null)
+    [ "$operstate" = "down" ] && return 1
+
+    if ip -6 addr show dev "$wan_dev" 2>/dev/null | grep -q "inet6 2"; then
+        return 0
+    fi
+    return 1
+}
+
+check_ipv4() {
+    ping -c 1 -W 2 1.1.1.1 >/dev/null 2>&1 && return 0
+    ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1 && return 0
+    return 1
+}
+
+check_ipv6() {
+    ping -c 1 -W 2 2001:4860:4860::8888 >/dev/null 2>&1 && return 0
+    ping -c 1 -W 2 2606:4700:4700::1111 >/dev/null 2>&1 && return 0
+    return 1
+}
+
+check_high_latency() {
+    local rtt
+    rtt=$(ping -c 1 -W 2 1.1.1.1 2>/dev/null | grep -o 'time=[0-9]*' | cut -d= -f2)
+    if [ -n "$rtt" ] && [ "$rtt" -gt 150 ]; then
+        return 0
+    fi
+    return 1
+}
+
+get_active_clients() {
+    (
+        iwinfo phy0-ap0 assoclist 2>/dev/null | grep -E '^[0-9A-Fa-f]' | cut -d' ' -f1
+        iwinfo phy1-ap0 assoclist 2>/dev/null | grep -E '^[0-9A-Fa-f]' | cut -d' ' -f1
+    ) | tr 'a-z' 'A-Z' | sort -u
+}
+
+CURRENT_STATE=""
+
+apply_state_force() {
+    local state="$1"
+    CURRENT_STATE="$state"
+
+    case "$state" in
+        "PERFECT")
+            turn_off_all
+            set_led "$GREEN_LED" 1
+            ;;
+        "DEGRADED")
+            turn_off_all
+            set_led "$RED_LED" 1
+            set_led "$GREEN_LED" 1
+            ;;
+        "V6_ONLY")
+            turn_off_all
+            set_led "$BLUE_LED" 1
+            ;;
+        "NO_INTERNET")
+            turn_off_all
+            set_led "$RED_LED" 1
+            ;;
+        "WAN_DOWN")
+            turn_off_all
+            blink_led "$RED_LED" 500
+            ;;
+    esac
+}
+
+apply_state() {
+    local new_state="$1"
+    [ "$CURRENT_STATE" = "$new_state" ] && return
+    apply_state_force "$new_state"
+}
+
+PREV_CLIENTS=$(get_active_clients)
+INTERNET_CHECK_COUNTER=0
+
+(
+while true; do
+    if is_upgrading; then
+        turn_off_all
+        exit 0
+    fi
+
+    if [ -f /tmp/led_override ]; then
+        sleep 1
+        continue
+    fi
+
+    CURRENT_HOUR=$(date +%H)
+    if [ "$CURRENT_HOUR" -ge 22 ] || [ "$CURRENT_HOUR" -lt 6 ]; then
+        turn_off_all
+        sleep 3
+        continue
+    fi
+
+    CURRENT_CLIENTS=$(get_active_clients)
+    if [ -n "$PREV_CLIENTS" ] && [ -n "$CURRENT_CLIENTS" ]; then
+        for c in $CURRENT_CLIENTS; do
+            if ! echo "$PREV_CLIENTS" | grep -q "$c"; then
+                turn_off_all
+                blink_led "$BLUE_LED" 250
+                sleep 3
+                apply_state_force "$CURRENT_STATE"
+                break
+            fi
+        done
+
+        for p in $PREV_CLIENTS; do
+            if ! echo "$CURRENT_CLIENTS" | grep -q "$p"; then
+                turn_off_all
+                blink_led "$RED_LED" 100
+                blink_led "$GREEN_LED" 100
+                sleep 2
+                apply_state_force "$CURRENT_STATE"
+                break
+            fi
+        done
+    fi
+    PREV_CLIENTS="$CURRENT_CLIENTS"
+
+    if [ "$INTERNET_CHECK_COUNTER" -le 0 ]; then
+        INTERNET_CHECK_COUNTER=10
+        if ! check_wan_link; then
+            apply_state "WAN_DOWN"
+        else
+            V4_OK=0
+            V6_OK=0
+            check_ipv4 && V4_OK=1
+            check_ipv6 && V6_OK=1
+
+            if [ "$V4_OK" = "1" ] && [ "$V6_OK" = "1" ]; then
+                if check_high_latency; then
+                    apply_state "DEGRADED"
+                else
+                    apply_state "PERFECT"
+                fi
+            elif [ "$V4_OK" = "0" ] && [ "$V6_OK" = "1" ]; then
+                apply_state "V6_ONLY"
+            elif [ "$V4_OK" = "1" ] && [ "$V6_OK" = "0" ]; then
+                apply_state "PERFECT"
+            else
+                apply_state "NO_INTERNET"
+            fi
+        fi
+    fi
+    INTERNET_CHECK_COUNTER=$((INTERNET_CHECK_COUNTER - 1))
+    sleep 1
+done
+) &
+EOF
+    fi
+    chmod +x "$INSTALL_DIR/wan_led_monitor.sh"
+    
+    cat << 'EOF' > /etc/init.d/wan-led-monitor
 #!/bin/sh /etc/rc.common
 USE_PROCD=1
 START=96
@@ -268,10 +595,9 @@ start_service() {
     procd_close_instance
 }
 EOF
-        chmod +x /etc/init.d/wan-led-monitor
-        /etc/init.d/wan-led-monitor enable 2>/dev/null || true
-        /etc/init.d/wan-led-monitor start 2>/dev/null || true
-    fi
+    chmod +x /etc/init.d/wan-led-monitor
+    /etc/init.d/wan-led-monitor enable 2>/dev/null || true
+    /etc/init.d/wan-led-monitor start 2>/dev/null || true
 fi
 
 # 9. Safety Rollback Utility
