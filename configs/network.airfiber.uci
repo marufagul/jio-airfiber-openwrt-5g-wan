@@ -29,15 +29,15 @@ config interface 'lan'
 # 802.1Q VLAN 1015 Device (Jio AirFiber 5G Public Internet Bearer)
 # Untagged traffic is reserved for internal ODU/TR-069 management.
 # Public Internet traffic REQUIRES 802.1Q tagged VLAN 1015 with MTU 1500.
-# IMPORTANT: Jio ODU binds to the stock router MAC (e.g. 9c:d4:a6:c9:c0:5a).
-# Replace with your unit's stock MAC from the bottom sticker if using third-party hardware.
+# IMPORTANT: Jio ODU binds to the stock router hardware MAC address.
+# Replace XX:XX:XX:XX:XX:XX with the MAC address printed on your stock Jio router sticker.
 config device
 	option name 'wan.1015'
 	option type '8021q'
 	option ifname 'wan'
 	option vid '1015'
 	option mtu '1500'
-	option macaddr '9c:d4:a6:c9:c0:5a'
+	option macaddr 'XX:XX:XX:XX:XX:XX'
 
 # 5G WAN6 Interface (Dual-Stack IPv6 via DHCPv6-PD on VLAN 1015)
 config interface 'wan6'
