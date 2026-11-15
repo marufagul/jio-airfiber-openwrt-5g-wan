@@ -56,10 +56,11 @@ wget -O - https://raw.githubusercontent.com/marufagul/jio-airfiber-openwrt-5g-wa
 
 ### What This Installer Does:
 1. 🛡️ **Safety Backup**: Saves `/etc/config/network`, `firewall`, and `wireless` to `/etc/jio-5g/backups/`.
-2. 🌐 **5G ODU WAN Link**: Detects the 2.5GbE PoE WAN interface connected to your Outdoor Unit and establishes native IPv6 connectivity.
-3. 🔄 **464XLAT CLAT Translation**: Sets up `clatd` with Jio's NAT64 prefix (`64:ff9b::/96`) for seamless IPv4 access (essential for Steam, PlayStation Network, banking apps).
-4. ⚡ **MediaTek WED Acceleration**: Activates Wireless Ethernet Dispatcher and nftables hardware flow offloading for line-rate 2.5 Gbps throughput at ~0% CPU load.
-5. 📶 **Wi-Fi 6 (160MHz Bandwidth)**: Configures 5GHz radio to HE160 channel width for up to 2402 Mbps wireless link speed.
+2. 🌐 **VLAN 1015 Provisioning**: Configures 802.1Q tagged interface `wan.1015` (untagged traffic on Jio 5G is restricted to internal TR-069 management; public internet requires VLAN 1015).
+3. 🔄 **Native 464XLAT CLAT Translation**: Sets up `clat` with Jio's NAT64 prefix (`64:ff9b::/96`) for seamless IPv4 access (essential for Steam, PlayStation Network, banking apps).
+4. 📦 **Dual Package Manager Support**: Automatically detects and supports modern OpenWrt 25.x (`apk`) and OpenWrt 23.05/24.10 (`opkg`).
+5. ⚡ **MediaTek WED Acceleration**: Activates Wireless Ethernet Dispatcher and nftables hardware flow offloading for line-rate 2.5 Gbps throughput at ~0% CPU load.
+6. 📶 **Wi-Fi 6 & MT76 DHCP Fix**: Configures 5GHz to HE160 (160MHz), sets 2.4GHz to HT20/WPA2 for legacy devices, and disables `multicast_to_unicast` to eliminate MT76 client DHCP drop bugs.
 
 To restore previous settings at any time:
 ```bash

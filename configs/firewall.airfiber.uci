@@ -1,6 +1,6 @@
 # ==============================================================================
 # OpenWrt UCI Firewall Template for Jio AirFiber 5G
-# Features MediaTek WED Hardware Flow Offloading and 1420 MSS Clamping
+# Features MediaTek WED Hardware Flow Offloading, 464XLAT CLAT, and MSS Clamping
 # ==============================================================================
 
 config defaults
@@ -23,10 +23,12 @@ config zone
 	option name 'wan'
 	list network 'wan'
 	list network 'wan6'
+	list network 'clat'
 	option input 'REJECT'
 	option output 'ACCEPT'
 	option forward 'REJECT'
 	option masq '1'
+	option masq6 '1'
 	option mtu_fix '1'
 
 config forwarding
