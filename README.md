@@ -33,6 +33,8 @@ We spent hundreds of hours in deep reverse engineering:
 
 **We are giving all of this hard-won engineering to the community 100% free and open-source.** If this project saved you weeks of headache, please consider starring ⭐ the repository and sharing it!
 
+— **Gul Marufa ([@marufagul](https://github.com/marufagul))**
+
 ---
 
 > [!TIP]
