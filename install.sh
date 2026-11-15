@@ -11,6 +11,15 @@ set -e
 INSTALL_DIR="/etc/jio-5g"
 BACKUP_DIR="/etc/jio-5g/backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+CUSTOM_MAC=""
+
+# Parse optional arguments
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --mac) CUSTOM_MAC="$2"; shift 2;;
+        *) echo "Unknown option: $1"; exit 1;;
+    esac
+done
 
 echo "================================================================="
 echo "🚀 Jio AirFiber 5G WAN & Wi-Fi 6 Engine Setup"
@@ -65,9 +74,15 @@ if [ -z "$WAN_PORT" ]; then
 fi
 echo "[+] Detected physical WAN device: $WAN_PORT"
 
-MAC_WAN=$(cat /sys/class/net/"$WAN_PORT"/address 2>/dev/null || echo "")
-if [ -n "$MAC_WAN" ]; then
-    echo "[+] Inheriting physical WAN MAC onto VLAN 1015: $MAC_WAN"
+# Determine MAC address to apply
+if [ -n "$CUSTOM_MAC" ]; then
+    MAC_WAN="$CUSTOM_MAC"
+    echo "[+] Using user-specified stock MAC: $MAC_WAN"
+else
+    MAC_WAN=$(cat /sys/class/net/"$WAN_PORT"/address 2>/dev/null || echo "")
+    if [ -n "$MAC_WAN" ]; then
+        echo "[+] Auto-inherited physical WAN MAC onto VLAN 1015: $MAC_WAN"
+    fi
 fi
 
 # 4. Configure 802.1Q VLAN 1015 for 5G Public Internet
@@ -116,8 +131,15 @@ uci set network.clat.metric='10'
 
 uci commit network
 
-# Install packages if needed (464xlat, kmod-nat46)
-pkg_install 464xlat kmod-nat46 odhcp6c
+# Check if nat46 is already compiled into kernel (/proc/net/nat46/control)
+# Only attempt package installation if not already present, avoiding kernel mismatch errors on OpenWrt 25.x
+if [ ! -e /proc/net/nat46/control ]; then
+    echo "[*] nat46 kernel driver not active in procfs. Checking package..."
+    pkg_install 464xlat kmod-nat46 odhcp6c
+else
+    echo "[+] nat46 kernel translation engine already built-in. Skipping kmod install."
+    pkg_install 464xlat odhcp6c
+fi
 
 # 5. Configure LAN IPv6 Prefix Delegation & odhcpd Router Advertisements
 echo "[*] Step 4/6: Configuring LAN IPv6 Prefix Delegation (odhcpd) & DNS cache..."
@@ -146,14 +168,18 @@ if grep -qi "MT7986" /proc/cpuinfo 2>/dev/null || [ -d /sys/module/mtk_soc_eth ]
     uci set firewall.@defaults[0].flow_offloading_hw='1'
 fi
 
-# Ensure WAN firewall zone covers wan, wan6, and clat
-uci delete firewall.@zone[1].network 2>/dev/null || true
-uci add_list firewall.@zone[1].network='wan'
-uci add_list firewall.@zone[1].network='wan6'
-uci add_list firewall.@zone[1].network='clat'
-uci set firewall.@zone[1].masq='1'
-uci set firewall.@zone[1].masq6='1'
-uci set firewall.@zone[1].mtu_fix='1'
+# Dynamically target WAN firewall zone by name
+WAN_ZONE=$(uci show firewall | grep "\.name='wan'" | cut -d'.' -f2 | head -n 1)
+if [ -n "$WAN_ZONE" ]; then
+    echo "[+] Adding wan, wan6, and clat to firewall zone '$WAN_ZONE'..."
+    uci delete firewall."$WAN_ZONE".network 2>/dev/null || true
+    uci add_list firewall."$WAN_ZONE".network='wan'
+    uci add_list firewall."$WAN_ZONE".network='wan6'
+    uci add_list firewall."$WAN_ZONE".network='clat'
+    uci set firewall."$WAN_ZONE".masq='1'
+    uci set firewall."$WAN_ZONE".masq6='1'
+    uci set firewall."$WAN_ZONE".mtu_fix='1'
+fi
 
 uci commit firewall
 
@@ -221,7 +247,34 @@ if [ -f /etc/config/wireless ]; then
     uci commit wireless
 fi
 
-# 8. Safety Rollback Utility
+# 8. Deploy Status LED Service if JIDU6401 Tri-Color LEDs detected
+if [ -d /sys/class/leds/green:status ] || [ -d /sys/class/leds/red:status ]; then
+    echo "[*] JIDU6401 hardware LEDs detected. Installing wan-led-monitor..."
+    SCRIPT_DIR=$(dirname "$0")
+    if [ -f "$SCRIPT_DIR/scripts/wan_led_monitor.sh" ]; then
+        cp "$SCRIPT_DIR/scripts/wan_led_monitor.sh" "$INSTALL_DIR/wan_led_monitor.sh"
+        chmod +x "$INSTALL_DIR/wan_led_monitor.sh"
+        
+        cat << 'EOF' > /etc/init.d/wan-led-monitor
+#!/bin/sh /etc/rc.common
+USE_PROCD=1
+START=96
+STOP=10
+
+start_service() {
+    procd_open_instance
+    procd_set_param command /etc/jio-5g/wan_led_monitor.sh
+    procd_set_param respawn
+    procd_close_instance
+}
+EOF
+        chmod +x /etc/init.d/wan-led-monitor
+        /etc/init.d/wan-led-monitor enable 2>/dev/null || true
+        /etc/init.d/wan-led-monitor start 2>/dev/null || true
+    fi
+fi
+
+# 9. Safety Rollback Utility
 cat << 'EOF' > "$INSTALL_DIR/backup_restore.sh"
 #!/bin/sh
 BACKUP_DIR="/etc/jio-5g/backups"
