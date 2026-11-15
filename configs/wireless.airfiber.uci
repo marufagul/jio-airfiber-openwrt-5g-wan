@@ -1,0 +1,40 @@
+# ==============================================================================
+# OpenWrt UCI Wireless Template for MediaTek Filogic 830 (MT7986 + MT7975)
+# Dual-Band Wi-Fi 6 (802.11ax) with 160MHz Bandwidth & WPA3-SAE
+# ==============================================================================
+
+# 2.4GHz Radio (MT7986 802.11b/g/n/ax)
+config wifi-device 'radio0'
+	option type 'mac80211'
+	option path 'platform/18000000.wmac'
+	option band '2g'
+	option channel 'auto'
+	option htmode 'HE40'
+	option country 'IN'
+	option cell_density '0'
+
+config wifi-iface 'default_radio0'
+	option device 'radio0'
+	option network 'lan'
+	option mode 'ap'
+	option ssid 'OpenWrt-Jio5G-2.4G'
+	option encryption 'sae-mixed'
+	option key 'ChangeThisStrongPassword123'
+
+# 5GHz Radio (MT7986 802.11a/n/ac/ax) - 160MHz Ultra-High Throughput
+config wifi-device 'radio1'
+	option type 'mac80211'
+	option path 'platform/18000000.wmac+1'
+	option band '5g'
+	option channel '36'
+	option htmode 'HE160'
+	option country 'IN'
+	option cell_density '0'
+
+config wifi-iface 'default_radio1'
+	option device 'radio1'
+	option network 'lan'
+	option mode 'ap'
+	option ssid 'OpenWrt-Jio5G-5G'
+	option encryption 'sae-mixed'
+	option key 'ChangeThisStrongPassword123'

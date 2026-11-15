@@ -1,0 +1,42 @@
+# ==============================================================================
+# OpenWrt UCI Network Template for Jio AirFiber 5G WAN
+# Supports IPv6 SLAAC / DHCPv6-PD and 464XLAT CLAT translation for IPv4
+# ==============================================================================
+
+config interface 'loopback'
+	option device 'lo'
+	option proto 'static'
+	option ipaddr '127.0.0.1'
+	option netmask '255.0.0.0'
+
+config globals 'globals'
+	option ula_prefix 'fd00:db8:1::/48'
+
+config device
+	option name 'br-lan'
+	option type 'bridge'
+	list ports 'lan1'
+	list ports 'lan2'
+	list ports 'lan3'
+
+config interface 'lan'
+	option device 'br-lan'
+	option proto 'static'
+	option ipaddr '192.168.1.1'
+	option netmask '255.255.255.0'
+	option ip6assign '60'
+
+# 5G WAN Interface (Connected to 2.5GbE PoE ODU on eth1)
+config interface 'wan6'
+	option device 'eth1'
+	option proto 'dhcpv6'
+	option reqaddress 'try'
+	option reqprefix 'auto'
+	option delegate '1'
+	option metric '10'
+
+# 464XLAT CLAT IPv4 Interface
+config interface 'wan'
+	option device '464-wan6'
+	option proto 'none'
+	option metric '10'
