@@ -505,7 +505,7 @@ apply_state() {
 PREV_CLIENTS=$(get_active_clients)
 INTERNET_CHECK_COUNTER=0
 
-(
+# Runs in foreground so procd tracks lifecycle cleanly without respawn churn
 while true; do
     if is_upgrading; then
         turn_off_all
@@ -513,14 +513,14 @@ while true; do
     fi
 
     if [ -f /tmp/led_override ]; then
-        sleep 1
+        sleep 5
         continue
     fi
 
     CURRENT_HOUR=$(date +%H)
     if [ "$CURRENT_HOUR" -ge 22 ] || [ "$CURRENT_HOUR" -lt 6 ]; then
         turn_off_all
-        sleep 3
+        sleep 10
         continue
     fi
 
@@ -550,7 +550,7 @@ while true; do
     PREV_CLIENTS="$CURRENT_CLIENTS"
 
     if [ "$INTERNET_CHECK_COUNTER" -le 0 ]; then
-        INTERNET_CHECK_COUNTER=10
+        INTERNET_CHECK_COUNTER=2
         if ! check_wan_link; then
             apply_state "WAN_DOWN"
         else
@@ -575,9 +575,8 @@ while true; do
         fi
     fi
     INTERNET_CHECK_COUNTER=$((INTERNET_CHECK_COUNTER - 1))
-    sleep 1
+    sleep 5
 done
-) &
 EOF
     fi
     chmod +x "$INSTALL_DIR/wan_led_monitor.sh"

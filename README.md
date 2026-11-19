@@ -69,6 +69,16 @@ To restore previous settings at any time:
 
 ---
 
+## 💻 Prefer Manual Setup? (No AI / No Scripts Required)
+
+If you prefer to configure your router manually using standard SSH commands and UCI tools without running any scripts or using AI assistants, follow our complete step-by-step terminal guide:
+
+👉 **[Read the Full Manual SSH Configuration Guide](docs/MANUAL_SSH_CONFIGURATION.md)**
+
+Every command is explained with zero black boxes: VLAN 1015 creation, 464XLAT CLAT parameters, MediaTek WED hardware acceleration flags, and MT76 Wi-Fi bugfixes.
+
+---
+
 ## 🌟 Core Innovations
 
 ### 1. Zero-Friction 464XLAT CLAT Integration

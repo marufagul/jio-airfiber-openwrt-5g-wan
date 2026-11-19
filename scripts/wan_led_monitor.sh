@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# Jio JIDU6401 Tri-Color Status LED Monitor Driver
+# Jio JIDU6401 Tri-Color Status LED Monitor Driver (Optimized Passive Loop)
 # Production driver for Sercomm JIDU6401 / MediaTek Filogic 830 (MT7986)
 # https://github.com/marufagul/jio-airfiber-openwrt-5g-wan
 #
@@ -14,7 +14,7 @@
 #   📶 Wi-Fi Alerts:   Blue flash on device join, Yellow flash on device leave
 # ==============================================================================
 
-trap 'turn_off_all; exit 0' TERM INT
+trap 'turn_off_all; exit 0' TERM INT HUP
 
 RED_LED="/sys/class/leds/red:status"
 GREEN_LED="/sys/class/leds/green:status"
@@ -131,6 +131,7 @@ apply_state() {
 PREV_CLIENTS=$(get_active_clients)
 INTERNET_CHECK_COUNTER=0
 
+# Runs in foreground so procd tracks lifecycle cleanly without respawn churn
 while true; do
     if is_upgrading; then
         turn_off_all
@@ -139,7 +140,7 @@ while true; do
 
     # Override Check: If a demo or manual color is requested, yield control completely
     if [ -f /tmp/led_override ]; then
-        sleep 1
+        sleep 5
         continue
     fi
 
@@ -147,7 +148,7 @@ while true; do
     CURRENT_HOUR=$(date +%H)
     if [ "$CURRENT_HOUR" -ge 22 ] || [ "$CURRENT_HOUR" -lt 6 ]; then
         turn_off_all
-        sleep 3
+        sleep 10
         continue
     fi
 
@@ -157,7 +158,6 @@ while true; do
         # Check if new device connected
         for c in $CURRENT_CLIENTS; do
             if ! echo "$PREV_CLIENTS" | grep -q "$c"; then
-                # New client connected -> Continuous 3-second Blue blink
                 turn_off_all
                 blink_led "$BLUE_LED" 250
                 sleep 3
@@ -169,7 +169,6 @@ while true; do
         # Check if device disconnected
         for p in $PREV_CLIENTS; do
             if ! echo "$CURRENT_CLIENTS" | grep -q "$p"; then
-                # Device disconnected -> Continuous rapid Amber/Yellow blink for 2 seconds
                 turn_off_all
                 blink_led "$RED_LED" 100
                 blink_led "$GREEN_LED" 100
@@ -181,9 +180,9 @@ while true; do
     fi
     PREV_CLIENTS="$CURRENT_CLIENTS"
 
-    # 2. Internet health check (every 10 seconds)
+    # 2. Internet health check (every 10 seconds: 2 iterations * 5s)
     if [ "$INTERNET_CHECK_COUNTER" -le 0 ]; then
-        INTERNET_CHECK_COUNTER=10
+        INTERNET_CHECK_COUNTER=2
 
         if ! check_wan_link; then
             apply_state "WAN_DOWN"
@@ -210,5 +209,5 @@ while true; do
     fi
 
     INTERNET_CHECK_COUNTER=$((INTERNET_CHECK_COUNTER - 1))
-    sleep 1
+    sleep 5
 done
