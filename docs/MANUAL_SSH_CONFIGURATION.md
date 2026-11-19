@@ -47,7 +47,9 @@ uci set network.wan_vlan1015.ifname='wan'
 uci set network.wan_vlan1015.vid='1015'
 uci set network.wan_vlan1015.mtu='1500'
 
-# 2. Inherit physical WAN MAC
+# 2. Inherit physical WAN MAC (or use factory sticker MAC)
+# If using your router bottom sticker MAC, set it directly:
+# uci set network.wan_vlan1015.macaddr='9C:D4:A6:XX:XX:XX'
 WAN_MAC=$(cat /sys/class/net/wan/address 2>/dev/null)
 [ -n "$WAN_MAC" ] && uci set network.wan_vlan1015.macaddr="$WAN_MAC"
 

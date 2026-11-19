@@ -54,11 +54,37 @@ We spent hundreds of hours in deep reverse engineering:
 
 ---
 
+## 🏷️ Step 0: Identify Your Router's Factory MAC Address (Crucial)
+
+Reliance Jio binds your 5G AirFiber connection and IPv6 prefix delegation to the **original factory WAN MAC address** provisioned on your account during installation.
+
+> [!WARNING]
+> If OpenWrt sends a randomized MAC or generic MediaTek MAC, Jio's 5G Broadband Network Gateway (BNG) will reject the DHCPv6 handshake or throttle your connection. You must use the factory MAC from your router's bottom sticker.
+
+```text
+┌────────────────────────────────────────────────────────────┐
+│  Jio AirFiber Home Gateway                                 │
+│  Model: JIDU6401                                           │
+│  WAN MAC:  9C:D4:A6:XX:XX:XX  <─── [NOTE DOWN THIS MAC]   │
+│  S/N:      RSVHGHKW00XXXXX                                 │
+└────────────────────────────────────────────────────────────┘
+```
+
+You can pass this MAC directly into the installer using the `--mac` flag, or configure it via UCI.
+
+---
+
 ## ⚡ Quick Start (1-Line Installer)
 
 Log in to your OpenWrt router via SSH and run:
 
 ```bash
+# Recommended: Specify your factory MAC from sticker
+wget -O install.sh https://raw.githubusercontent.com/marufagul/jio-airfiber-openwrt-5g-wan/main/install.sh
+chmod +x install.sh
+./install.sh --mac "9C:D4:A6:XX:XX:XX"
+
+# Alternative: Auto-detects physical WAN hardware MAC
 wget -O - https://raw.githubusercontent.com/marufagul/jio-airfiber-openwrt-5g-wan/main/install.sh | sh
 ```
 
