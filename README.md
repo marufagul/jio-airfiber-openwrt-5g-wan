@@ -16,6 +16,14 @@
 
 ---
 
+> [!TIP]
+> ### 📦 Complete Jio OpenWrt Ecosystem Suite
+> • 🚀 **5G WAN & Wi-Fi 6 Engine:** [jio-airfiber-openwrt-5g-wan](https://github.com/marufagul/jio-airfiber-openwrt-5g-wan) *(This Repo - 2.5G Wire-Speed, 464XLAT & HE160 Wi-Fi)*  
+> • 📞 **Home Landline Voice Gateway:** [openwrt-jiofiber-voice-lan](https://github.com/marufagul/openwrt-jiofiber-voice-lan) *(Free landline calls over Wi-Fi via JioJoin & SIP)*  
+> • 🌍 **Global Cloud Asterisk PBX:** [jiofiber-asterisk-global-pbx](https://github.com/marufagul/jiofiber-asterisk-global-pbx) *(Zero roaming landline calling on your phone worldwide)*
+
+---
+
 ## 💡 Why I Built This (A Note from the Author)
 
 When I flashed OpenWrt onto my Jio AirFiber router, I plugged the 5G Outdoor Unit (ODU) into the 2.5GbE PoE WAN port—and **nothing worked properly**. 
