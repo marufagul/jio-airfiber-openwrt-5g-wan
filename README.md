@@ -78,6 +78,15 @@ You can pass this MAC directly into the installer using the `--mac` flag, or con
 
 Log in to your OpenWrt router via SSH and run:
 
+> [!NOTE]
+> **First time on fresh OpenWrt? (No internet on the router yet to run `wget`?)**  
+> Fresh OpenWrt cannot reach the internet until VLAN 1015 is created. Copy-paste this quick 2-line bootstrap into your SSH terminal to bring up IPv6 immediately:
+> ```bash
+> uci set network.wan_vlan1015=device; uci set network.wan_vlan1015.name='wan.1015'; uci set network.wan_vlan1015.type='8021q'; uci set network.wan_vlan1015.ifname='wan'; uci set network.wan_vlan1015.vid='1015'; uci set network.wan_vlan1015.macaddr='9C:D4:A6:XX:XX:XX'
+> uci set network.wan6=interface; uci set network.wan6.device='wan.1015'; uci set network.wan6.proto='dhcpv6'; uci commit network; /etc/init.d/network restart
+> ```
+> *(Replace `9C:D4:A6:XX:XX:XX` with your bottom sticker MAC. Once pasted, `wget` will work instantly!)*
+
 ```bash
 # Recommended: Specify your factory MAC from sticker
 wget -O install.sh https://raw.githubusercontent.com/marufagul/jio-airfiber-openwrt-5g-wan/main/install.sh

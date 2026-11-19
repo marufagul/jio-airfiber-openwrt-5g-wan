@@ -47,11 +47,12 @@ uci set network.wan_vlan1015.ifname='wan'
 uci set network.wan_vlan1015.vid='1015'
 uci set network.wan_vlan1015.mtu='1500'
 
-# 2. Inherit physical WAN MAC (or use factory sticker MAC)
-# If using your router bottom sticker MAC, set it directly:
-# uci set network.wan_vlan1015.macaddr='9C:D4:A6:XX:XX:XX'
-WAN_MAC=$(cat /sys/class/net/wan/address 2>/dev/null)
-[ -n "$WAN_MAC" ] && uci set network.wan_vlan1015.macaddr="$WAN_MAC"
+# 2. Apply your factory WAN MAC address from bottom sticker (Mandatory for Jio BNG)
+uci set network.wan_vlan1015.macaddr='9C:D4:A6:XX:XX:XX'  # <-- Replace with your sticker WAN MAC
+
+# (Optional fallback if sticker is unreadable: inherit physical port address)
+# WAN_MAC=$(cat /sys/class/net/wan/address 2>/dev/null)
+# [ -n "$WAN_MAC" ] && uci set network.wan_vlan1015.macaddr="$WAN_MAC"
 
 # 3. Configure WAN6 DHCPv6 client on VLAN 1015
 uci set network.wan6=interface
