@@ -288,8 +288,8 @@ uci commit dhcp
 # 6. Configure Firewall (MediaTek WED Hardware Offload & MSS Clamping)
 echo "[*] Step 5/6: Tuning firewall for line-rate 5G throughput..."
 
-# Set global MSS clamping to 1420 bytes
-uci set firewall.@defaults[0].mtu_fix='1'
+# Clean up any legacy/invalid global mtu_fix in @defaults[0] (mtu_fix belongs in zone)
+uci -q delete firewall.@defaults[0].mtu_fix 2>/dev/null || true
 
 # Activate hardware flow offload for Filogic 830 MT7986
 uci set firewall.@defaults[0].flow_offloading='1'

@@ -128,7 +128,7 @@ The MediaTek Filogic 830 MT7986 has dual hardware packet processing engines (Wir
 # 1. Enable MediaTek WED hardware flow offloading
 uci set firewall.@defaults[0].flow_offloading='1'
 uci set firewall.@defaults[0].flow_offloading_hw='1'
-uci set firewall.@defaults[0].mtu_fix='1'
+uci -q delete firewall.@defaults[0].mtu_fix 2>/dev/null || true
 
 # 2. Add TCP MSS clamping (1420 bytes) to nftables
 nft add rule inet fw4 mangle_forward oifname "wan.1015" tcp flags syn tcp option maxseg size set 1420 2>/dev/null
